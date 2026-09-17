@@ -8,6 +8,16 @@ const val NODE_TIMEOUT_MS = 3500L
 const val GC_PERIOD_MS = 500L
 const val BUFFER_SIZE = 1024
 
+/**
+ * Подбирает IP-адрес нужного семейства (IPv4/IPv6) на конкретном интерфейсе.
+ * Если интерфейс не задан явно — возвращает wildcard-адрес соответствующего семейства.
+ *
+ * Раньше вместо этого использовался MulticastSocket(port) на wildcard-адресе
+ * с последующим socket.setNetworkInterface(iface) — именно этот вызов на разных
+ * машинах падал с "Invalid argument" (dual-stack сокет, VPN, отсутствие IPv6
+ * на интерфейсе и т.д.). Привязка сокета сразу к IP интерфейса через bind
+ * этой проблемы не имеет — ОС сама направляет трафик через нужный адаптер.
+ */
 private fun resolveBindAddress(iface: NetworkInterface?, preferIpv6: Boolean): InetAddress {
     if (iface != null) {
         val addr = iface.inetAddresses.toList().firstOrNull { a ->
@@ -18,7 +28,7 @@ private fun resolveBindAddress(iface: NetworkInterface?, preferIpv6: Boolean): I
     return if (preferIpv6) InetAddress.getByName("::") else InetAddress.getByName("0.0.0.0")
 }
 
-private fun <T> Enumeration<T>.toList(): List<T> {
+private fun <T> java.util.Enumeration<T>.toList(): List<T> {
     val result = mutableListOf<T>()
     while (hasMoreElements()) result.add(nextElement())
     return result
@@ -33,6 +43,8 @@ class SelfDiscovery(
     private val socketAddress = InetSocketAddress(groupAddress, port)
     private val bindAddress = resolveBindAddress(networkInterface, groupAddress is Inet6Address)
 
+    // Приёмный сокет: биндимся сразу на IP интерфейса (а не на wildcard +
+    // setNetworkInterface, который и был источником ошибок на разных машинах).
     private val socket = MulticastSocket(InetSocketAddress(bindAddress, port)).apply {
         reuseAddress = true
         timeToLive = 4
@@ -49,6 +61,12 @@ class SelfDiscovery(
         }
     }
 
+    // Отдельный сокет только для отправки, с произвольным (эфемерным) портом,
+    // но привязан к тому же IP, что и приёмный. Раздельные source-порты на
+    // отправку нужны, чтобы у всех копий на одном хосте не совпадал source
+    // (IP:порт -> group:порт) — иначе на некоторых системах ядро начинает
+    // распределять входящий multicast-трафик между слушателями вместо честной
+    // рассылки каждому.
     private val sendSocket = DatagramSocket(0, bindAddress)
 
     private val registry = PeerRegistry(NODE_TIMEOUT_MS)
