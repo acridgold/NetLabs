@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ConfigTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-17T02:18:20.941Z" hostname="ASUS-Lev" time="0.057">
+  <properties/>
+  <testcase name="парсинг падает при пустых аргументах()" classname="ConfigTest" time="0.014"/>
+  <testcase name="корректный парсинг IPv6 адреса и сетевого интерфейса()" classname="ConfigTest" time="0.019"/>
+  <testcase name="корректный парсинг IPv4 адреса и порта()" classname="ConfigTest" time="0.001"/>
+  <testcase name="парсинг падает, если передан не multicast адрес()" classname="ConfigTest" time="0.006"/>
+  <testcase name="устанавливается порт по умолчанию, если он не передан()" classname="ConfigTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

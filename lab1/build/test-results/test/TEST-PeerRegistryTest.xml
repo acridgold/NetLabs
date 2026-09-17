@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="PeerRegistryTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-17T02:18:21.002Z" hostname="ASUS-Lev" time="0.022">
+  <properties/>
+  <testcase name="prune не удаляет активные узлы()" classname="PeerRegistryTest" time="0.008"/>
+  <testcase name="обновление существующего узла без смены IP возвращает false()" classname="PeerRegistryTest" time="0.001"/>
+  <testcase name="добавление нового узла возвращает true()" classname="PeerRegistryTest" time="0.0"/>
+  <testcase name="prune удаляет узел, если превышен таймаут()" classname="PeerRegistryTest" time="0.0"/>
+  <testcase name="snapshot возвращает отсортированный список IP-адресов()" classname="PeerRegistryTest" time="0.005"/>
+  <testcase name="изменение IP-адреса существующего узла возвращает true()" classname="PeerRegistryTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
