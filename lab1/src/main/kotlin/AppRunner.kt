@@ -5,7 +5,7 @@ import kotlin.system.exitProcess
 object AppRunner {
 
     fun run(args: Array<String>) {
-        System.setProperty("java.net.preferIPv4Stack", "true")
+//        System.setProperty("java.net.preferIPv4Stack", "true")
         val config = runCatching { parseArguments(args) }.getOrElse {
             System.err.println(it.message)
             exitProcess(1)

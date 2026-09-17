@@ -8,6 +8,22 @@ const val NODE_TIMEOUT_MS = 3500L
 const val GC_PERIOD_MS = 500L
 const val BUFFER_SIZE = 1024
 
+private fun resolveBindAddress(iface: NetworkInterface?, preferIpv6: Boolean): InetAddress {
+    if (iface != null) {
+        val addr = iface.inetAddresses.toList().firstOrNull { a ->
+            if (preferIpv6) a is Inet6Address else a is Inet4Address
+        }
+        if (addr != null) return addr
+    }
+    return if (preferIpv6) InetAddress.getByName("::") else InetAddress.getByName("0.0.0.0")
+}
+
+private fun <T> Enumeration<T>.toList(): List<T> {
+    val result = mutableListOf<T>()
+    while (hasMoreElements()) result.add(nextElement())
+    return result
+}
+
 class SelfDiscovery(
     private val groupAddress: InetAddress,
     private val port: Int,
@@ -15,17 +31,11 @@ class SelfDiscovery(
     private val selfId: UUID
 ) {
     private val socketAddress = InetSocketAddress(groupAddress, port)
-    private val socket = MulticastSocket(port).apply {
+    private val bindAddress = resolveBindAddress(networkInterface, groupAddress is Inet6Address)
+
+    private val socket = MulticastSocket(InetSocketAddress(bindAddress, port)).apply {
         reuseAddress = true
         timeToLive = 4
-
-        if (networkInterface != null) {
-            try {
-                setNetworkInterface(networkInterface)
-            } catch (e: SocketException) {
-                System.err.println("Не удалось установить исходящий интерфейс: ${e.message}")
-            }
-        }
 
         try {
             joinGroup(socketAddress, networkInterface)
@@ -34,10 +44,12 @@ class SelfDiscovery(
                 "Не удалось присоединиться к multicast-группе через интерфейс " +
                         "${networkInterface?.name ?: "(по умолчанию)"}: ${e.message}"
             )
-            System.err.println("Запустите программу с явным указанием интерфейса, например: 230.0.0.1 5000 lo")
+            System.err.println("Попробуйте указать другой сетевой интерфейс, например: 230.0.0.1 5000 lo")
             throw e
         }
     }
+
+    private val sendSocket = DatagramSocket(0, bindAddress)
 
     private val registry = PeerRegistry(NODE_TIMEOUT_MS)
 
@@ -62,6 +74,7 @@ class SelfDiscovery(
         } catch (_: Exception) {
         }
         socket.close()
+        sendSocket.close()
     }
 
     private fun sendLoop() {
@@ -69,7 +82,7 @@ class SelfDiscovery(
             try {
                 val data = Protocol.formatBytes(selfId)
                 val packet = DatagramPacket(data, data.size, groupAddress, port)
-                socket.send(packet)
+                sendSocket.send(packet)
             } catch (e: Exception) {
                 if (running) System.err.println("Ошибка отправки heartbeat: ${e.message}")
             }
@@ -85,7 +98,7 @@ class SelfDiscovery(
                 socket.receive(packet)
                 handleIncoming(packet)
             } catch (e: Exception) {
-                if (running) System.err.println("Ошибка приема: ${e.message}")
+                if (running) System.err.println("Ошибка приёма: ${e.message}")
             }
         }
     }
@@ -112,7 +125,7 @@ class SelfDiscovery(
             lastPrintedSnapshot = snapshot
             val timestamp = Instant.now()
             if (snapshot.isEmpty()) {
-                println("[$timestamp] Живых копий не обнаружено (список пуст).")
+                println("[$timestamp] Живых копий не обнаружено (кроме себя).")
             } else {
                 println("[$timestamp] Живые копии (${snapshot.size}): ${snapshot.joinToString(", ")}")
             }
