@@ -26,15 +26,49 @@ fun parseArguments(args: Array<String>): Config {
     return Config(groupAddress, port, groupAddress is Inet6Address, args.getOrNull(2))
 }
 
+/**
+ * Выбирает сетевой интерфейс для multicast.
+ *
+ * Раньше брался первый попавшийся интерфейс, у которого есть адрес нужного
+ * семейства. На машинах с VPN/туннелями (utun, tap, tun, vpn, docker, vbox,
+ * vmnet и т.п.) это часто оказывался не тот адаптер, и multicast-трафик уходил
+ * не в ту сеть — Windows и Linux не видели друг друга.
+ *
+ * Теперь предпочитаем интерфейс с «глобальным» (не link-local) адресом нужного
+ * семейства, игнорируя туннели и виртуальные адаптеры. Если такого нет —
+ * откатываемся к любому поднятому multicast-интерфейсу.
+ */
 fun pickDefaultInterface(isIpv6: Boolean): NetworkInterface? {
-    return NetworkInterface.getNetworkInterfaces().toList().firstOrNull { nif ->
-        try {
-            nif.isUp && nif.supportsMulticast() && !nif.isLoopback &&
-                    nif.inetAddresses.toList().any { addr ->
-                        if (isIpv6) addr is Inet6Address else addr is Inet4Address
-                    }
-        } catch (e: SocketException) {
-            false
+    val interfaces = NetworkInterface.getNetworkInterfaces().toList()
+
+    fun hasFamilyAddress(nif: NetworkInterface): Boolean =
+        nif.inetAddresses.toList().any { addr ->
+            if (isIpv6) addr is Inet6Address else addr is Inet4Address
         }
+
+    fun hasGlobalAddress(nif: NetworkInterface): Boolean =
+        nif.inetAddresses.toList().any { addr ->
+            if (isIpv6) addr is Inet6Address && !addr.isLinkLocalAddress && !addr.isSiteLocalAddress
+            else addr is Inet4Address && !addr.isLinkLocalAddress && !addr.isSiteLocalAddress
+        }
+
+    fun isUsable(nif: NetworkInterface): Boolean = try {
+        nif.isUp && nif.supportsMulticast() && !nif.isLoopback && hasFamilyAddress(nif)
+    } catch (e: SocketException) {
+        false
     }
+
+    // Туннели и виртуальные адаптеры, которые почти наверняка не нужны.
+    val tunnelNames = listOf("utun", "tun", "tap", "vpn", "ppp", "docker", "veth",
+        "vbox", "vmnet", "virbr", "br-", "awdl", "llw", "bridge", "anpi")
+
+    fun isTunnel(nif: NetworkInterface): Boolean =
+        tunnelNames.any { nif.name.startsWith(it, ignoreCase = true) }
+
+    // 1) Реальный интерфейс с глобальным адресом нужного семейства.
+    interfaces.firstOrNull { nif -> isUsable(nif) && !isTunnel(nif) && hasGlobalAddress(nif) }
+        // 2) Любой не-туннельный интерфейс с адресом нужного семейства.
+        ?: interfaces.firstOrNull { nif -> isUsable(nif) && !isTunnel(nif) }
+        // 3) Любой поднятый multicast-интерфейс (включая туннели) — крайний случай.
+        ?: interfaces.firstOrNull { nif -> isUsable(nif) }
 }
