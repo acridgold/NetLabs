@@ -76,6 +76,8 @@ lab1/
 
 Это соберёт образ (Gradle внутри контейнера сборки скомпилирует твой jar) и запустит три контейнера — `mcast-node1`, `mcast-node2`, `mcast-node3` — каждый со своим IP (`172.28.0.11`, `.12`, `.13`) в общей сети `labnet`.
 
+> Чтобы собрать в IntelliJ IDEA нужно выбрать `Edit Configuration...` -> `lab1: Compose Deployment` -> `Modify` -> `Build` -> `Always (--build)`.
+
 ## 2. Если контейнеры не видят друг друга (multicast snooping)
 
 Та же проблема, что мы уже чинили на `ip netns`/самодельном bridge: Docker создаёт под сеть `labnet` свой Linux bridge с включённым multicast snooping, из-за чего multicast-пакеты могут не форвардиться между контейнерами.
