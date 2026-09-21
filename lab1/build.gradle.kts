@@ -1,3 +1,5 @@
+import java.io.File
+
 plugins {
     kotlin("jvm") version "2.1.10"
     application
@@ -55,6 +57,45 @@ fun registerNodeTask(name: String) = tasks.register<JavaExec>(name) {
 val runNode1 by registerNodeTask("runNode1")
 val runNode2 by registerNodeTask("runNode2")
 val runNode3 by registerNodeTask("runNode3")
+
+tasks.register("runAll") {
+    group = "discovery"
+    description = "Запускает все три копии параллельно; вывод каждой — в build/discovery-logs/nodeN.log"
+
+    doLast {
+        val javaBin = org.gradle.internal.jvm.Jvm.current().javaExecutable.absolutePath
+        val classpath = sourceSets["main"].runtimeClasspath.asPath
+        val logsDir = layout.buildDirectory.dir("discovery-logs").get().asFile
+        logsDir.mkdirs()
+
+        val processes = (1..3).map { i ->
+            val logFile = File(logsDir, "node$i.log")
+            ProcessBuilder(
+                javaBin,
+                "-Dfile.encoding=UTF-8",
+                "-Dsun.stdout.encoding=UTF-8",
+                "-Dsun.stderr.encoding=UTF-8",
+                "-cp", classpath,
+                "MainKt",
+                *discoveryArgs.toTypedArray()
+            )
+                .redirectOutput(logFile)
+                .redirectErrorStream(true)
+                .start()
+        }
+
+        println("Запущено узлов: ${processes.size}")
+        println("Логи: ${logsDir}/node1.log, node2.log, node3.log")
+        println("Смотреть в реальном времени, например: tail -f ${logsDir}/node1.log ${logsDir}/node2.log ${logsDir}/node3.log")
+        println("Ctrl+C здесь остановит все три узла.")
+
+        Runtime.getRuntime().addShutdownHook(Thread {
+            processes.forEach { it.destroy() }
+        })
+
+        processes.forEach { it.waitFor() }
+    }
+}
 
 tasks.jar {
     manifest {

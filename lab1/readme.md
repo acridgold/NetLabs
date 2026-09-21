@@ -46,3 +46,84 @@ java -jar app.jar ff02::1 5000 eth0
 - Протокол IPv4/IPv6 определяется автоматически по типу переданного адреса
   (`Inet4Address` / `Inet6Address`); для IPv6 join происходит через конкретный
   сетевой интерфейс, как того требует Java API для multicast в IPv6.
+
+--- 
+
+
+# Мультикаст в 3 контейнера
+
+## Структура
+
+Положи эти файлы **в корень твоего Kotlin-проекта** (там же, где `build.gradle.kts`):
+
+```
+lab1/
+├── build.gradle.kts
+├── settings.gradle.kts
+├── src/...
+├── Dockerfile          ← новый
+├── docker-compose.yml  ← новый
+└── fix-multicast.sh    ← новый
+```
+
+## 1. Собрать и запустить
+
+```bash
+  docker compose down --rmi all -v
+  docker compose build --no-cache
+  docker compose up
+```
+
+Это соберёт образ (Gradle внутри контейнера сборки скомпилирует твой jar) и запустит три контейнера — `mcast-node1`, `mcast-node2`, `mcast-node3` — каждый со своим IP (`172.28.0.11`, `.12`, `.13`) в общей сети `labnet`.
+
+## 2. Если контейнеры не видят друг друга (multicast snooping)
+
+Та же проблема, что мы уже чинили на `ip netns`/самодельном bridge: Docker создаёт под сеть `labnet` свой Linux bridge с включённым multicast snooping, из-за чего multicast-пакеты могут не форвардиться между контейнерами.
+
+**В отдельном терминале, пока `docker compose up` работает:**
+
+```bash
+chmod +x fix-multicast.sh
+./fix-multicast.sh lab1-docker_labnet
+```
+
+Имя сети зависит от того, как называется папка проекта (docker-compose добавляет префикс — имя папки). Проверить точное имя:
+
+```bash
+docker network ls
+```
+
+Найди сеть вида `<папка-проекта>_labnet` и передай его первым аргументом скрипту.
+
+После этого перезапусти контейнеры (или просто немного подожди — иногда snooping сам переключается на flood-режим через несколько секунд без querier, но явное отключение надёжнее):
+
+```bash
+docker compose restart
+```
+
+## 3. Проверить, что видят друг друга
+
+```bash
+docker compose logs -f
+```
+
+В логах каждого узла должны появиться строки вида:
+```
+[...] Живые копии (2): 172.28.0.12, 172.28.0.13
+```
+
+## 4. Проверить обычный ping между контейнерами (для диагностики)
+
+```bash
+docker exec -it mcast-node1 ping -c 3 172.28.0.12
+```
+
+## 5. Остановить и убрать всё
+
+```bash
+docker compose down
+```
+
+## Если используешь другое имя папки проекта
+
+`docker-compose.yml` не завязан на конкретное имя — просто при первом запуске проверь `docker network ls`, чтобы узнать точное имя сети для `fix-multicast.sh` (обычно `<имя_папки>_labnet`).

@@ -21,15 +21,6 @@ object AppRunner {
             }
         } ?: pickDefaultInterface(config.isIpv6)
 
-        // Диагностика: показываем все интерфейсы и какой выбран. Помогает понять,
-        // почему multicast не доходит — часто выбирается VPN/туннель вместо реальной сети.
-        println("Доступные сетевые интерфейсы:")
-        NetworkInterface.getNetworkInterfaces().toList().forEach { nif ->
-            val addrs = nif.inetAddresses.toList()
-                .joinToString(", ") { "${it.hostAddress}${if (it.isLinkLocalAddress) " (link-local)" else ""}" }
-            println("  ${nif.name}: up=${nif.isUp}, multicast=${nif.supportsMulticast()}, " +
-                    "loopback=${nif.isLoopback}, addrs=[$addrs]")
-        }
         println("Выбран интерфейс: ${networkInterface?.name ?: "(по умолчанию)"}")
 
         if (config.isIpv6 && networkInterface == null) {
