@@ -8,8 +8,6 @@
 
 ```bash
 gradle build
-# или, если есть только kotlinc:
-kotlinc src/main/kotlin/Main.kt -include-runtime -d app.jar
 ```
 
 ## Запуск
@@ -36,7 +34,7 @@ java -jar app.jar ff02::1 5000 eth0
 
 - При старте генерируется случайный UUID — идентификатор данной копии.
 - Каждую секунду копия рассылает в multicast-группу сообщение вида
-  `SELF-DISCOVERY-V1|<uuid>|<timestamp>`.
+  `ALOOO|<uuid>|<timestamp>`.
 - При получении такого сообщения от другого UUID узел запоминает
   `(uuid -> IP, время последнего пакета)`.
 - Фоновый поток каждые 0.5 сек проверяет, не "протух" ли какой-то узел
@@ -63,7 +61,6 @@ lab1/
 ├── src/...
 ├── Dockerfile          ← новый
 ├── docker-compose.yml  ← новый
-└── fix-multicast.sh    ← новый
 ```
 
 ## 1. Собрать и запустить
@@ -77,17 +74,6 @@ lab1/
 Это соберёт образ (Gradle внутри контейнера сборки скомпилирует твой jar) и запустит три контейнера — `mcast-node1`, `mcast-node2`, `mcast-node3` — каждый со своим IP (`172.28.0.11`, `.12`, `.13`) в общей сети `labnet`.
 
 > Чтобы собрать в IntelliJ IDEA нужно выбрать `Edit Configuration...` -> `lab1: Compose Deployment` -> `Modify` -> `Build` -> `Always (--build)`.
-
-## 2. Если контейнеры не видят друг друга (multicast snooping)
-
-Та же проблема, что мы уже чинили на `ip netns`/самодельном bridge: Docker создаёт под сеть `labnet` свой Linux bridge с включённым multicast snooping, из-за чего multicast-пакеты могут не форвардиться между контейнерами.
-
-**В отдельном терминале, пока `docker compose up` работает:**
-
-```bash
-chmod +x fix-multicast.sh
-./fix-multicast.sh lab1-docker_labnet
-```
 
 Имя сети зависит от того, как называется папка проекта (docker-compose добавляет префикс — имя папки). Проверить точное имя:
 
@@ -125,7 +111,3 @@ docker exec -it mcast-node1 ping -c 3 172.28.0.12
 ```bash
 docker compose down
 ```
-
-## Если используешь другое имя папки проекта
-
-`docker-compose.yml` не завязан на конкретное имя — просто при первом запуске проверь `docker network ls`, чтобы узнать точное имя сети для `fix-multicast.sh` (обычно `<имя_папки>_labnet`).
