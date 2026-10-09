@@ -1,0 +1,37 @@
+services:
+  server:
+    build: .
+    command: ["server", "5267"]
+    ports:
+      - "5267:5267"
+    environment:
+      TZ: Asia/Novosibirsk
+    volumes:
+      - ./uploads:/data/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/5267'"]
+      interval: 5s
+      retries: 20
+
+  gen:
+    build:
+      context: .
+      target: gen
+    environment:
+      FILE_NAME: ${FILE:-test.bin}
+      SIZE_MB: ${SIZE_MB:-20480}
+    volumes:
+      - ./:/files
+
+  client:
+    build: .
+    command: ["client", "/files/${FILE:-test.bin}", "server", "5267"]
+    environment:
+      TZ: Asia/Novosibirsk
+    volumes:
+      - ./:/files:ro
+    depends_on:
+      gen:
+        condition: service_completed_successfully
+      server:
+        condition: service_healthy

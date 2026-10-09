@@ -1,0 +1,1 @@
+import MyApp.runCli;fun main(args: Array<String>)=runCli(args)
