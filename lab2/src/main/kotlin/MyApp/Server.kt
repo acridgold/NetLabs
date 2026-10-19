@@ -30,7 +30,7 @@ const val DEFAULT_MAX_CLIENTS = 32
 private const val MAX_WAITING_CLIENTS = 64
 private const val REPORT_INTERVAL_SEC = 3L
 private const val SOCKET_TIMEOUT_MS = 30_000
-private const val MAX_FS_NAME_BYTES = 200 // запас под суффикс " (n)", лимит ФС обычно 255
+private const val MAX_FS_NAME_BYTES = 200
 
 /**
  * Один активный приём: счётчики + логика отчётов.
@@ -48,13 +48,12 @@ private class Session(
     private val startWallMs = System.currentTimeMillis()
 
     @Volatile private var received = 0L
-    @Volatile private var readNs = 0L      // время, проведённое в socket read() (кроме первого)
-    @Volatile private var writeNs = 0L     // время, проведённое в записи на диск
+    @Volatile private var readNs = 0L
+    @Volatile private var writeNs = 0L
     @Volatile private var reads = 0L
-    @Volatile private var firstByteNs = -1L // READY отправлен -> пришёл первый байт данных
+    @Volatile private var firstByteNs = -1L
     private val intervalMaxReadNs = AtomicLong()
 
-    // состояние репортёра (под synchronized)
     private var lastNs = startNs
     private var lastBytes = 0L
     private var lastReads = 0L
@@ -68,7 +67,7 @@ private class Session(
 
     fun onRead(ns: Long, bytes: Int) {
         if (reads == 0L) {
-            firstByteNs = ns // ожидание первого байта ≈ RTT + реакция клиента, в «паузы» не входит
+            firstByteNs = ns
         } else {
             readNs += ns
             intervalMaxReadNs.accumulateAndGet(ns) { a, b -> if (a > b) a else b }
@@ -127,7 +126,6 @@ private class Session(
         return inst
     }
 
-    /** Клиент, проработавший меньше интервала, всё равно получает хотя бы одну строку скорости. */
     @Synchronized
     fun reportIfNeverReported() {
         if (!reported) report()
@@ -173,7 +171,6 @@ private class Session(
     }
 }
 
-/** Грубая эвристика: где проводит время обработчик. */
 private fun bottleneck(netShare: Double, diskShare: Double): String = when {
     diskShare >= 50 -> "узкое место: диск сервера"
     netShare >= 50 -> "узкое место: сеть/отправитель"
@@ -189,7 +186,6 @@ fun runServer(port: Int, maxClients: Int = DEFAULT_MAX_CLIENTS) {
     Files.createDirectories(uploads)
     val protocol: TransferProtocol = TcpTransferProtocol()
 
-    // Поток-репортёр: раз в MyApp.REPORT_INTERVAL_SEC печатает скорость каждого активного клиента.
     val ticker = Executors.newSingleThreadScheduledExecutor { r ->
         Thread(r, "speed-reporter").apply { isDaemon = true }
     }
@@ -205,9 +201,6 @@ fun runServer(port: Int, maxClients: Int = DEFAULT_MAX_CLIENTS) {
         }
     }, REPORT_INTERVAL_SEC, REPORT_INTERVAL_SEC, TimeUnit.SECONDS)
 
-    // Не более maxClients рабочих потоков. Главный поток только принимает соединения (accept) и
-    // передаёт их пулу, поэтому никогда не блокируется: если все потоки заняты, клиент ждёт в очереди
-    // (до MyApp.MAX_WAITING_CLIENTS), а при переполнении очереди получает немедленный отказ.
     val threadNo = AtomicInteger(1)
     val workers = ThreadPoolExecutor(
         maxClients, maxClients, 0L, TimeUnit.SECONDS,
@@ -258,7 +251,6 @@ fun runServer(port: Int, maxClients: Int = DEFAULT_MAX_CLIENTS) {
     ticker.shutdownNow()
 }
 
-/** Все потоки и очередь заняты: короткий отказ (Reply.FAIL вместо READY), accept-цикл не задерживается. */
 private fun rejectBusy(socket: Socket, id: Int, protocol: TransferProtocol) {
     val remote = remoteOf(socket)
     try {
@@ -286,14 +278,14 @@ private fun handleClient(socket: Socket, id: Int, uploads: Path, protocol: Trans
     var failure: String? = null
     try {
         socket.use { s ->
-            s.soTimeout = SOCKET_TIMEOUT_MS // зависший клиент не должен вечно занимать слот
-            s.tcpNoDelay = true // чтобы алгоритм Нейгла не искажал измерение RTT
+            s.soTimeout = SOCKET_TIMEOUT_MS
+            s.tcpNoDelay = true
             val input = DataInputStream(BufferedInputStream(s.getInputStream(), BUFFER_SIZE))
             val output = DataOutputStream(s.getOutputStream())
 
             // --- заголовок ---
             val header = protocol.readHeader(input)
-                ?: return@use // закрыто без данных (healthcheck / проба порта) — не ошибка
+                ?: return@use
             val size = header.fileSize
             val headerNs = System.nanoTime() - acceptNs
 
@@ -331,7 +323,7 @@ private fun handleClient(socket: Socket, id: Int, uploads: Path, protocol: Trans
             } catch (e: IOException) {
                 throw IOException("не удалось отправить ответ клиенту: ${e.message}", e)
             }
-            success = complete // успех фиксируется только после того, как ответ ушёл клиенту
+            success = complete
         }
     } catch (e: Throwable) {
         failure = "${e.javaClass.simpleName}: ${e.message}"
@@ -344,11 +336,6 @@ private fun handleClient(socket: Socket, id: Int, uploads: Path, protocol: Trans
     }
 }
 
-/**
- * Безопасно выбирает и атомарно создаёт файл внутри uploads.
- * Берётся только последний компонент имени, управляющие символы удаляются,
- * при коллизии добавляется суффикс " (n)".
- */
 private fun createTargetFile(uploads: Path, rawName: String): Path {
     val base = sanitize(rawName)
     var attempt = 0
@@ -357,7 +344,7 @@ private fun createTargetFile(uploads: Path, rawName: String): Path {
         val path = uploads.resolve(candidate).normalize()
         if (path.parent != uploads) throw IOException("недопустимое имя файла")
         try {
-            return Files.createFile(path) // CREATE_NEW: атомарно, не перезапишет чужой файл
+            return Files.createFile(path)
         } catch (ignored: FileAlreadyExistsException) {
             attempt++
         }
