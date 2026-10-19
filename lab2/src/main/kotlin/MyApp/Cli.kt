@@ -1,4 +1,5 @@
 package MyApp
+
 import kotlin.system.exitProcess
 
 private const val DEFAULT_HOST = "localhost"
@@ -48,8 +49,8 @@ fun runCli(args: Array<String>) {
 }
 
 private fun parsePort(s: String): Int =
-    s.toIntOrNull()?.takeIf { it in 0..65535 } ?: run {
-        System.err.println("Некорректный порт: $s")
+    s.toIntOrNull()?.takeIf { it in 1..65535 } ?: run {
+        System.err.println("Некорректный порт: $s (допустимо 1..65535)")
         usage()
     }
 

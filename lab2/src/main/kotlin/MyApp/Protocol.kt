@@ -3,6 +3,10 @@ package MyApp
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.IOException
+import java.nio.ByteBuffer
+import java.nio.CharBuffer
+import java.nio.charset.CharacterCodingException
+import java.nio.charset.CodingErrorAction
 
 const val ALOOO = 0x4E534B503637 // "NSKP67"
 const val MAX_NAME_BYTES = 4096
@@ -14,9 +18,7 @@ const val BUFFER_SIZE = 64 * 1024
 
 class ProtocolException(message: String) : IOException(message)
 
-data class FileHeader(val fileName: String, val fileSize: Long) {
-    val nameBytes: ByteArray get() = fileName.toByteArray(Charsets.UTF_8)
-}
+data class FileHeader(val fileName: String, val fileSize: Long)
 
 enum class Reply(val code: Int) {
     FAIL(STATUS_FAIL),
@@ -46,18 +48,40 @@ class TcpTransferProtocol : TransferProtocol {
     }
 
     override fun validate(header: FileHeader) {
-        val nameLen = header.nameBytes.size
-        if (nameLen !in 1..MAX_NAME_BYTES) {
-            throw ProtocolException("длина имени $nameLen байт вне диапазона 1..$MAX_NAME_BYTES")
+        checkedNameBytes(header)
+    }
+
+    private fun checkedNameBytes(header: FileHeader): ByteArray {
+        val name = try {
+            val buf = Charsets.UTF_8.newEncoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .encode(CharBuffer.wrap(header.fileName))
+            ByteArray(buf.remaining()).also { buf.get(it) }
+        } catch (e: CharacterCodingException) {
+            throw ProtocolException("имя файла нельзя представить в UTF-8")
+        }
+        if (name.size !in 1..MAX_NAME_BYTES) {
+            throw ProtocolException("длина имени ${name.size} байт вне диапазона 1..$MAX_NAME_BYTES")
         }
         if (header.fileSize !in 0..MAX_FILE_SIZE) {
             throw ProtocolException("размер ${header.fileSize} байт вне диапазона 0..$MAX_FILE_SIZE")
         }
+        return name
+    }
+
+    private fun decodeName(bytes: ByteArray): String = try {
+        Charsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+            .decode(ByteBuffer.wrap(bytes))
+            .toString()
+    } catch (e: CharacterCodingException) {
+        throw ProtocolException("имя файла не является корректным UTF-8")
     }
 
     override fun writeHeader(out: DataOutputStream, header: FileHeader) {
-        validate(header)
-        val name = header.nameBytes
+        val name = checkedNameBytes(header)
         for (shift in (MAGIC_BYTES - 1) * 8 downTo 0 step 8) {
             out.write(((ALOOO ushr shift) and 0xFF).toInt())
         }
@@ -84,7 +108,7 @@ class TcpTransferProtocol : TransferProtocol {
 
         val size = input.readLong()
         if (size !in 0..MAX_FILE_SIZE) throw ProtocolException("недопустимый размер файла: $size байт")
-        return FileHeader(String(nameBytes, Charsets.UTF_8), size)
+        return FileHeader(decodeName(nameBytes), size)
     }
 
     override fun writeReply(out: DataOutputStream, reply: Reply) {
