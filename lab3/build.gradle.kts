@@ -1,5 +1,5 @@
 plugins {
-    kotlin("jvm") version "2.1.10"
+    kotlin("jvm") version "2.0.21"
     application
 }
 
@@ -12,13 +12,10 @@ dependencies {
 }
 
 kotlin {
-    jvmToolchain(23)
+    jvmToolchain(17)
 }
 
 application {
-    mainClass.set("MainKt")
-}
-
-tasks.named<JavaExec>("run") {
-    standardInput = System.`in`
+    mainClass.set("APICalling.MainKt")
+    applicationDefaultJvmArgs = listOf("-Dfile.encoding=UTF-8", "-Dswing.aatext=true", "-Dawt.useSystemAAFontSettings=on")
 }

@@ -1,3 +1,5 @@
-import APICalling.ui.ConsoleApp
+package APICalling
 
-fun main() = ConsoleApp.create().run()
+import APICalling.ui.GuiApp
+
+fun main() = GuiApp.create().run()

@@ -18,6 +18,7 @@ class WeatherApi(private val client: JsonHttpClient) {
                     tempC = details.get("air_temperature").asDouble(),
                     windMs = details.get("wind_speed").asDouble(),
                     humidity = details.get("relative_humidity").asDouble(),
+                    pressureMmHg = details.get("air_pressure_at_sea_level")?.asDouble()?.times(Config.HPA_TO_MMHG),
                     symbol = data.get("next_1_hours")?.get("summary")?.get("symbol_code")?.asText(),
                     time = now.get("time").asText(),
                 )

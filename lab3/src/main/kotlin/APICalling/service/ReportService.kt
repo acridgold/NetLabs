@@ -14,16 +14,17 @@ class ReportService(
     private val placesApi: PlacesApi,
     private val descriptionApi: DescriptionApi,
 ) {
-    fun loadReport(loc: Location): CompletableFuture<Report> {
+    fun loadReport(loc: Location, radiusM: Int): CompletableFuture<Report> {
         val weather = weatherApi.current(loc).asOutcome()
-        val places = placesWithDescriptions(loc).asOutcome()
-        return weather.thenCombine(places) { w, p -> Report(loc, w, p) }
+        val places = placesWithDescriptions(loc, radiusM).asOutcome()
+        return weather.thenCombine(places) { w, p -> Report(loc, radiusM, w, p) }
     }
 
-    private fun placesWithDescriptions(loc: Location): CompletableFuture<List<Place>> =
-        placesApi.nearby(loc).thenCompose { refs ->
-            val futures = refs.map(descriptionApi::describe)
-            CompletableFuture.allOf(*futures.toTypedArray())
-                .thenApply { futures.map { it.join() } }
+    private fun placesWithDescriptions(loc: Location, radiusM: Int): CompletableFuture<List<Place>> =
+        placesApi.nearby(loc, radiusM).thenCompose { refs ->
+            refs.map { descriptionApi.describe(it) }
+                .fold(CompletableFuture.completedFuture(emptyList<Place>())) { acc, future ->
+                    acc.thenCombine(future) { list, place -> list + place }
+                }
         }
 }
