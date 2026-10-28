@@ -17,7 +17,7 @@ object Config {
 
     const val HPA_TO_MMHG = 0.750062
 
-    private const val DEFAULT_GRAPHHOPPER_KEY = "b332357a-5d07-43ea-9905-8321530a1ac4"
+    private const val DEFAULT_GRAPHHOPPER_KEY = "YOUR_GRAPHHOPPER_KEY"
 
     @Volatile
     var graphHopperKey: String = System.getenv("GRAPHHOPPER_KEY")?.takeIf { it.isNotBlank() } ?: DEFAULT_GRAPHHOPPER_KEY
