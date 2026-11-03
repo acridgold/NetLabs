@@ -19,6 +19,15 @@ object Fmt {
 
     fun number(v: Double, digits: Int = 1): String = String.format(ru, "%.${digits}f", v)
 
+    fun excerpt(text: String, maxChars: Int = 240): String {
+        val first = text.lineSequence().firstOrNull { it.isNotBlank() }?.trim() ?: return text.trim()
+        if (first.length <= maxChars) return first
+        val cut = first.take(maxChars)
+        val sentenceEnd = cut.lastIndexOf(". ")
+        if (sentenceEnd > maxChars / 2) return cut.take(sentenceEnd + 1)
+        return cut.substringBeforeLast(' ').trimEnd(',', ';', ':', '.', ' ') + "…"
+    }
+
     fun updated(iso: String): String = try {
         OffsetDateTime.parse(iso).atZoneSameInstant(ZoneId.systemDefault())
             .format(DateTimeFormatter.ofPattern("d MMM, HH:mm", ru))

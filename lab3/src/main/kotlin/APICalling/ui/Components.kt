@@ -107,7 +107,7 @@ open class GradientPanel : JPanel() {
     }
 }
 
-class AccentButton(text: String) : JButton(text) {
+class AccentButton(text: String, compact: Boolean = false) : JButton(text) {
     init {
         isContentAreaFilled = false
         isBorderPainted = false
@@ -115,9 +115,9 @@ class AccentButton(text: String) : JButton(text) {
         isOpaque = false
         isRolloverEnabled = true
         foreground = Color.WHITE
-        font = Theme.font(14f, true)
+        font = Theme.font(if (compact) 13f else 14f, true)
         cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-        border = BorderFactory.createEmptyBorder(11, 22, 11, 22)
+        border = if (compact) BorderFactory.createEmptyBorder(8, 16, 8, 16) else BorderFactory.createEmptyBorder(11, 22, 11, 22)
     }
 
     override fun paintComponent(g: Graphics) {
@@ -405,6 +405,7 @@ class WrapText(
     color: Color,
     private val prefWidth: Int = 200,
     private val centered: Boolean = false,
+    private val guessWidth: Int = prefWidth,
 ) : JComponent() {
     private var knownWidth = 0
     private var cachedWidth = -1
@@ -449,7 +450,7 @@ class WrapText(
 
     override fun getPreferredSize(): Dimension {
         val fm = getFontMetrics(font)
-        val w = if (knownWidth > 0) knownWidth else prefWidth
+        val w = if (knownWidth > 0) knownWidth else guessWidth
         return Dimension(prefWidth, lines(w).size * fm.height + 2)
     }
 
@@ -477,6 +478,68 @@ class WrapText(
             g2.drawString(line, x, y)
             y += fm.height
         }
+        g2.dispose()
+    }
+}
+
+class NumberBadge(private val number: Int, private val side: Int = 28) : JComponent() {
+    init {
+        val d = Dimension(side, side)
+        preferredSize = d
+        minimumSize = d
+        maximumSize = d
+        isOpaque = false
+    }
+
+    override fun paintComponent(g: Graphics) {
+        val g2 = g.create() as Graphics2D
+        g2.smooth()
+        g2.paint = GradientPaint(0f, 0f, Theme.accent, side.toFloat(), side.toFloat(), Theme.accent2)
+        g2.fillOval(0, 0, side - 1, side - 1)
+        g2.font = Theme.font(if (number > 9) 11f else 13f, true)
+        g2.color = Color.WHITE
+        val fm = g2.fontMetrics
+        val text = number.toString()
+        g2.drawString(text, (side - fm.stringWidth(text)) / 2, (side - fm.height) / 2 + fm.ascent)
+        g2.dispose()
+    }
+}
+
+class CloseButton(private val onClose: () -> Unit) : JComponent() {
+    private var hover = false
+
+    init {
+        val d = Dimension(30, 30)
+        preferredSize = d
+        minimumSize = d
+        maximumSize = d
+        isOpaque = false
+        cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        toolTipText = "Свернуть"
+        addMouseListener(object : java.awt.event.MouseAdapter() {
+            override fun mouseEntered(e: java.awt.event.MouseEvent) {
+                hover = true
+                repaint()
+            }
+
+            override fun mouseExited(e: java.awt.event.MouseEvent) {
+                hover = false
+                repaint()
+            }
+
+            override fun mouseClicked(e: java.awt.event.MouseEvent) = onClose()
+        })
+    }
+
+    override fun paintComponent(g: Graphics) {
+        val g2 = g.create() as Graphics2D
+        g2.smooth()
+        g2.color = if (hover) Theme.danger.alpha(60) else Theme.field
+        g2.fillOval(0, 0, width - 1, height - 1)
+        g2.color = if (hover) Theme.danger else Theme.textDim
+        g2.stroke = BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+        g2.drawLine(10, 10, width - 11, height - 11)
+        g2.drawLine(width - 11, 10, 10, height - 11)
         g2.dispose()
     }
 }

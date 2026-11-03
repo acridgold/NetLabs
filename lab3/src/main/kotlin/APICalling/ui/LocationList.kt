@@ -34,7 +34,7 @@ class LocationList(private val onChoose: (Location) -> Unit) : JPanel(BorderLayo
             isOpaque = false
             alignmentX = LEFT_ALIGNMENT
             border = BorderFactory.createEmptyBorder(8, 6, 0, 6)
-            add(WrapText(text, Theme.font(13f), color, 330), BorderLayout.CENTER)
+            add(WrapText(text, Theme.font(13f), color, 40, guessWidth = 330), BorderLayout.CENTER)
         })
         box.revalidate()
         box.repaint()
@@ -43,8 +43,8 @@ class LocationList(private val onChoose: (Location) -> Unit) : JPanel(BorderLayo
     fun show(locations: List<Location>) {
         cards.clear()
         box.removeAll()
-        for (location in locations) {
-            val card = LocationCard(location) { chosen ->
+        for ((index, location) in locations.withIndex()) {
+            val card = LocationCard(index + 1, location) { chosen ->
                 cards.forEach { it.selected = it.item === chosen }
                 onChoose(chosen)
             }
@@ -59,7 +59,7 @@ class LocationList(private val onChoose: (Location) -> Unit) : JPanel(BorderLayo
     fun clearSelection() = cards.forEach { it.selected = false }
 }
 
-private class LocationCard(val item: Location, private val onClick: (Location) -> Unit) :
+private class LocationCard(number: Int, val item: Location, private val onClick: (Location) -> Unit) :
     RoundedPanel(20, Theme.card) {
 
     private var hover = false
@@ -71,7 +71,7 @@ private class LocationCard(val item: Location, private val onClick: (Location) -
         }
 
     init {
-        layout = BorderLayout()
+        layout = BorderLayout(12, 0)
         alignmentX = LEFT_ALIGNMENT
         border = BorderFactory.createEmptyBorder(12, 14, 12, 14)
         cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
@@ -80,17 +80,21 @@ private class LocationCard(val item: Location, private val onClick: (Location) -
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             isOpaque = false
         }
-        col.add(WrapText(item.name, Theme.font(15f, true), Theme.text, 330))
+        col.add(WrapText(item.name, Theme.font(15f, true), Theme.text, 40, guessWidth = 300))
         val address = item.address
         if (address.isNotEmpty()) {
             col.add(vgap(3))
-            col.add(WrapText(address, Theme.font(12f), Theme.textDim, 330))
+            col.add(WrapText(address, Theme.font(12f), Theme.textDim, 40, guessWidth = 300))
         }
         col.add(Box.createVerticalStrut(8))
         col.add(rowOf(6, *listOfNotNull(
-            item.osmKey?.let { Chip(it, Theme.textDim) },
-            item.osmValue?.let { Chip(it, Theme.accent2) },
+            item.osmKey?.let { Chip(OsmTags.key(it), Theme.textDim) },
+            item.osmValue?.let { Chip(OsmTags.value(it), Theme.accent2) },
         ).toTypedArray()))
+        add(JPanel(BorderLayout()).apply {
+            isOpaque = false
+            add(NumberBadge(number), BorderLayout.NORTH)
+        }, BorderLayout.WEST)
         add(col, BorderLayout.CENTER)
 
         addMouseListener(object : MouseAdapter() {

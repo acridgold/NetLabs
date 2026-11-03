@@ -2,7 +2,6 @@ package APICalling.ui
 
 import APICalling.model.Location
 import APICalling.model.Outcome
-import APICalling.model.Place
 import APICalling.model.Report
 import APICalling.model.Weather
 import java.awt.BorderLayout
@@ -98,8 +97,8 @@ class ReportView : JPanel(BorderLayout()) {
             places.isEmpty() -> col.add(
                 messageCard("В радиусе ${Fmt.radius(report.radiusM)} в Википедии ничего не нашлось. Попробуйте увеличить радиус.")
             )
-            else -> places.forEach {
-                col.add(placeCard(it))
+            else -> places.forEachIndexed { index, place ->
+                col.add(PlaceCard(index + 1, place, decode(place.imageBytes)))
                 col.add(vgap(12))
             }
         }
@@ -118,8 +117,8 @@ class ReportView : JPanel(BorderLayout()) {
     private fun heroCard(l: Location): JComponent {
         val card = card().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
         card.add(rowOf(6, *listOfNotNull(
-            l.osmKey?.let { Chip(it, Theme.textDim) },
-            l.osmValue?.let { Chip(it, Theme.accent2) },
+            l.osmKey?.let { Chip(OsmTags.key(it), Theme.textDim) },
+            l.osmValue?.let { Chip(OsmTags.value(it), Theme.accent2) },
         ).toTypedArray()))
         card.add(vgap(10))
         card.add(WrapText(l.name, Theme.font(30f, true), Theme.text, 560))
@@ -164,6 +163,11 @@ class ReportView : JPanel(BorderLayout()) {
                 foreground = Theme.accent2
             })
         }
+        left.add(vgap(4))
+        left.add(JLabel("Ощущается как ${Fmt.temp(w.feelsLikeC)}").left().apply {
+            font = Theme.font(13f)
+            foreground = Theme.textDim
+        })
         left.add(vgap(6))
         left.add(JLabel("Данные на ${Fmt.updated(w.time)}").left().apply {
             font = Theme.font(11f)
@@ -217,42 +221,6 @@ class ReportView : JPanel(BorderLayout()) {
     private fun messageCard(text: String, color: Color = Theme.textDim): JComponent {
         val card = card(22).apply { layout = BorderLayout() }
         card.add(WrapText(text, Theme.font(14f), color, 520), BorderLayout.CENTER)
-        return card
-    }
-
-    private fun placeCard(place: Place): JComponent {
-        val card = RoundedPanel(24, Theme.card).left().apply {
-            layout = BorderLayout(18, 0)
-            border = BorderFactory.createEmptyBorder(14, 14, 14, 18)
-        }
-        card.add(PlaceImage(place.title, decode(place.imageBytes)), BorderLayout.WEST)
-
-        val body = JPanel().apply {
-            layout = BoxLayout(this, BoxLayout.Y_AXIS)
-            isOpaque = false
-        }
-        body.add(rowOf(
-            10,
-            JLabel(place.title).apply {
-                font = Theme.font(18f, true)
-                foreground = Theme.text
-            },
-            Chip(Fmt.distance(place.distanceM), Theme.accent2),
-        ))
-        body.add(vgap(6))
-        val description = place.description?.let { if (it.length > 420) it.take(417).trimEnd() + "…" else it }
-        body.add(
-            WrapText(
-                description ?: "Описание в Википедии отсутствует.",
-                Theme.font(13f),
-                if (description == null) Theme.hint else Theme.textDim,
-                460,
-            )
-        )
-        card.add(JPanel(BorderLayout()).apply {
-            isOpaque = false
-            add(body, BorderLayout.NORTH)
-        }, BorderLayout.CENTER)
         return card
     }
 

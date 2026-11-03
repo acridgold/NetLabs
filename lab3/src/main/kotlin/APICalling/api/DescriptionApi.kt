@@ -13,7 +13,7 @@ class DescriptionApi(private val client: JsonHttpClient) {
     fun describe(ref: PlaceRef): CompletableFuture<Place> =
         client.getJson(
             "${Config.DESCRIPTION_URL}?action=query&prop=extracts%7Cpageimages&pageids=${ref.pageId}" +
-                    "&exintro=1&explaintext=1&exsentences=3&piprop=thumbnail&pithumbsize=${Config.IMAGE_SIZE_PX}" +
+                    "&exintro=1&explaintext=1&piprop=thumbnail&pithumbsize=${Config.IMAGE_SIZE_PX}" +
                     "&format=json&formatversion=2"
         )
             .thenApply { json ->
@@ -25,10 +25,10 @@ class DescriptionApi(private val client: JsonHttpClient) {
             }
             .thenCompose { info ->
                 loadImage(info.imageUrl).thenApply { bytes ->
-                    Place(ref.title, ref.distanceM, info.description, info.imageUrl, bytes)
+                    Place(ref.pageId, ref.title, ref.distanceM, info.description, info.imageUrl, bytes)
                 }
             }
-            .exceptionally { Place(ref.title, ref.distanceM, null, null, null) }
+            .exceptionally { Place(ref.pageId, ref.title, ref.distanceM, null, null, null) }
 
     private fun loadImage(url: String?): CompletableFuture<ByteArray?> =
         if (url == null) CompletableFuture.completedFuture(null)

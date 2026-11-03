@@ -27,6 +27,7 @@ data class Location(
 
 data class Weather(
     val tempC: Double,
+    val feelsLikeC: Double,
     val windMs: Double,
     val humidity: Double,
     val pressureMmHg: Double?,
@@ -37,6 +38,7 @@ data class Weather(
 data class PlaceRef(val pageId: Long, val title: String, val distanceM: Int)
 
 class Place(
+    val pageId: Long,
     val title: String,
     val distanceM: Int,
     val description: String?,
