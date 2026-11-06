@@ -1,23 +1,15 @@
 package APICalling.ui
 
 import APICalling.Config
+import APICalling.errorText
+import APICalling.isCancellation
 import APICalling.model.Location
 import APICalling.model.Report
 import APICalling.service.LocationService
 import APICalling.service.ReportService
-import java.awt.BorderLayout
-import java.awt.Color
-import java.awt.Dimension
-import java.awt.GridBagConstraints
-import java.awt.GridBagLayout
-import java.awt.Insets
-import java.util.concurrent.CompletionException
-import javax.swing.BorderFactory
-import javax.swing.BoxLayout
-import javax.swing.ButtonGroup
-import javax.swing.JLabel
-import javax.swing.JPanel
-import javax.swing.SwingUtilities
+import java.awt.*
+import java.util.concurrent.CompletableFuture
+import javax.swing.*
 
 class MainPanel(
     private val locationService: LocationService,
@@ -36,13 +28,14 @@ class MainPanel(
     private var searchSeq = 0
     private var reportSeq = 0
 
+    private var searchFuture: CompletableFuture<*>? = null
+    private var reportFuture: CompletableFuture<*>? = null
+
     init {
         layout = BorderLayout(0, 16)
         border = BorderFactory.createEmptyBorder(22, 26, 14, 26)
 
-        val saved = Settings.graphHopperKey.ifBlank { Config.graphHopperKey }
-        Config.graphHopperKey = saved
-        keyField.text = saved
+        keyField.text = Config.graphHopperKey
 
         add(buildHeader(), BorderLayout.NORTH)
 
@@ -74,9 +67,11 @@ class MainPanel(
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             isOpaque = false
         }
-        column.add(JLabel("<html><span style='color:#F3F4FF'>Geo</span><span style='color:#7C5CFF'>Brief</span></html>").left().apply {
-            font = Theme.font(30f, true)
-        })
+        column.add(
+            JLabel("<html><span style='color:#F3F4FF'>Geo</span><span style='color:#7C5CFF'>Brief</span></html>").left()
+                .apply {
+                    font = Theme.font(30f, true)
+                })
         column.add(JLabel("погода и интересные места рядом").left().apply {
             font = Theme.font(13f)
             foreground = Theme.textDim
@@ -130,20 +125,23 @@ class MainPanel(
         val query = searchField.text.trim()
         if (query.isEmpty()) return
 
-        Config.graphHopperKey = String(keyField.password).trim()
-        Settings.graphHopperKey = Config.graphHopperKey
+        Config.graphHopperKey = String(keyField.password).trim() // только в памяти
 
         val seq = ++searchSeq
         selected = null
         reportSeq++
+        searchFuture?.cancel(true)
+        reportFuture?.cancel(true)
         reportView.showEmpty()
         results.showMessage("Ищу «$query»…")
         setStatus("Поиск локаций…", Theme.accent2)
         searchButton.isEnabled = false
 
-        locationService.searchLocations(query).whenComplete { list, error ->
+        val future = locationService.searchLocations(query)
+        searchFuture = future
+        future.whenComplete { list, error ->
             SwingUtilities.invokeLater {
-                if (seq != searchSeq) return@invokeLater
+                if (isCancellation(error) || seq != searchSeq) return@invokeLater
                 searchButton.isEnabled = true
                 when {
                     error != null -> {
@@ -151,10 +149,12 @@ class MainPanel(
                         results.showMessage(message, Theme.danger)
                         setStatus(message, Theme.danger)
                     }
+
                     list.isNullOrEmpty() -> {
                         results.showMessage("Ничего не найдено. Попробуйте изменить запрос.")
                         setStatus("Ничего не найдено", Theme.textDim)
                     }
+
                     else -> {
                         results.show(list)
                         setStatus("Найдено вариантов: ${list.size}. Выберите нужный.", Theme.ok)
@@ -167,12 +167,15 @@ class MainPanel(
     private fun loadReport(location: Location) {
         selected = location
         val seq = ++reportSeq
+        reportFuture?.cancel(true)
         reportView.showLoading(location)
-        setStatus("Загружаю погоду и места…", Theme.accent2)
+        setStatus("Загружаю прогноз и места…", Theme.accent2)
 
-        reportService.loadReport(location, radiusM).whenComplete { report, error ->
+        val future = reportService.loadReport(location, radiusM)
+        reportFuture = future
+        future.whenComplete { report, error ->
             SwingUtilities.invokeLater {
-                if (seq != reportSeq) return@invokeLater
+                if (isCancellation(error) || seq != reportSeq) return@invokeLater
                 if (error != null) {
                     val message = messageOf(error)
                     reportView.showError(message)
@@ -192,14 +195,26 @@ class MainPanel(
     }
 
     private fun summarize(report: Report) {
-        val problems = listOfNotNull(
-            report.weather.error?.let { "погода: $it" },
-            report.places.error?.let { "места: $it" },
-        )
-        if (problems.isEmpty()) {
-            setStatus("Готово: ${report.location.name}", Theme.ok)
-        } else {
-            setStatus("Часть данных недоступна — ${problems.joinToString("; ")}", Theme.danger)
+        val problems = mutableListOf<String>()
+        report.weather.error?.let { problems += "прогноз: $it" }
+        report.places.error?.let { problems += "места: $it" }
+
+        val places = report.places.value.orEmpty()
+        val withoutText = places.count { it.error != null }
+        val withoutImage = places.count { it.imageError != null }
+        if (withoutText > 0) problems += "описания не загружены: $withoutText из ${places.size}"
+        if (withoutImage > 0) problems += "картинки не загружены: $withoutImage из ${places.size}"
+
+        when {
+            problems.isEmpty() -> setStatus("Готово: ${report.location.name}", Theme.ok)
+            else -> {
+                val severe = (report.weather.error != null && report.places.error != null) ||
+                        (places.isNotEmpty() && withoutText == places.size)
+                setStatus(
+                    "Загружено с ошибками — ${problems.joinToString("; ")}",
+                    if (severe) Theme.danger else Theme.warn
+                )
+            }
         }
     }
 
@@ -208,8 +223,5 @@ class MainPanel(
         status.foreground = color
     }
 
-    private fun messageOf(error: Throwable): String {
-        val e = if (error is CompletionException) error.cause ?: error else error
-        return e.message ?: e.javaClass.simpleName
-    }
+    private fun messageOf(error: Throwable): String = errorText(error)
 }

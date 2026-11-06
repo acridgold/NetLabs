@@ -19,6 +19,7 @@ object Theme {
     val accent2 = Color(0x22D3EE)
     val danger = Color(0xFF6B81)
     val ok = Color(0x4ADE80)
+    val warn = Color(0xFBBF24)
 
     private val family: String = run {
         val available = GraphicsEnvironment.getLocalGraphicsEnvironment().availableFontFamilyNames.toSet()

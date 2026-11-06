@@ -1,36 +1,12 @@
 package APICalling.ui
 
-import java.awt.BasicStroke
-import java.awt.Color
-import java.awt.Component
-import java.awt.Cursor
-import java.awt.Dimension
-import java.awt.Font
-import java.awt.GradientPaint
-import java.awt.Graphics
-import java.awt.Graphics2D
-import java.awt.RadialGradientPaint
-import java.awt.Rectangle
-import java.awt.RenderingHints
+import java.awt.*
 import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
 import java.awt.geom.Ellipse2D
 import java.awt.geom.RoundRectangle2D
 import java.awt.image.BufferedImage
-import javax.swing.BorderFactory
-import javax.swing.Box
-import javax.swing.BoxLayout
-import javax.swing.JButton
-import javax.swing.JComponent
-import javax.swing.JLabel
-import javax.swing.JPanel
-import javax.swing.JPasswordField
-import javax.swing.JScrollPane
-import javax.swing.JTextField
-import javax.swing.JToggleButton
-import javax.swing.Scrollable
-import javax.swing.SwingConstants
-import javax.swing.Timer
+import javax.swing.*
 import javax.swing.plaf.basic.BasicScrollBarUI
 import javax.swing.text.JTextComponent
 import kotlin.math.max
@@ -117,7 +93,12 @@ class AccentButton(text: String, compact: Boolean = false) : JButton(text) {
         foreground = Color.WHITE
         font = Theme.font(if (compact) 13f else 14f, true)
         cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-        border = if (compact) BorderFactory.createEmptyBorder(8, 16, 8, 16) else BorderFactory.createEmptyBorder(11, 22, 11, 22)
+        border = if (compact) BorderFactory.createEmptyBorder(8, 16, 8, 16) else BorderFactory.createEmptyBorder(
+            11,
+            22,
+            11,
+            22
+        )
     }
 
     override fun paintComponent(g: Graphics) {
@@ -311,7 +292,8 @@ class Orb : JComponent() {
     }
 }
 
-class PlaceImage(private val title: String, private val image: BufferedImage?, private val side: Int = 132) : JComponent() {
+class PlaceImage(private val title: String, private val image: BufferedImage?, private val side: Int = 132) :
+    JComponent() {
     init {
         val d = Dimension(side, side)
         preferredSize = d
@@ -332,7 +314,14 @@ class PlaceImage(private val title: String, private val image: BufferedImage?, p
             val h = (img.height * scale).toInt()
             g2.drawImage(img, (width - w) / 2, (height - h) / 2, w, h, null)
         } else {
-            g2.paint = GradientPaint(0f, 0f, Theme.accent.alpha(200), width.toFloat(), height.toFloat(), Theme.accent2.alpha(200))
+            g2.paint = GradientPaint(
+                0f,
+                0f,
+                Theme.accent.alpha(200),
+                width.toFloat(),
+                height.toFloat(),
+                Theme.accent2.alpha(200)
+            )
             g2.fillRect(0, 0, width, height)
             val letter = title.firstOrNull { it.isLetter() }?.uppercase() ?: "•"
             g2.font = Theme.font(48f, true)
@@ -394,6 +383,7 @@ class ColumnPanel : JPanel(), Scrollable {
     override fun getScrollableUnitIncrement(visibleRect: Rectangle, orientation: Int, direction: Int): Int = 18
     override fun getScrollableBlockIncrement(visibleRect: Rectangle, orientation: Int, direction: Int): Int =
         if (orientation == SwingConstants.VERTICAL) visibleRect.height - 40 else visibleRect.width
+
     override fun getScrollableTracksViewportWidth(): Boolean = true
     override fun getScrollableTracksViewportHeight(): Boolean = false
 }
@@ -415,7 +405,7 @@ class WrapText(
         font = textFont
         foreground = color
         isOpaque = false
-        alignmentX = Component.LEFT_ALIGNMENT
+        alignmentX = LEFT_ALIGNMENT
     }
 
     fun setContent(text: String) {

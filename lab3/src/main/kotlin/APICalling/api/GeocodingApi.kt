@@ -3,21 +3,22 @@ package APICalling.api
 import APICalling.Config
 import APICalling.model.Location
 import APICalling.net.JsonHttpClient
+import APICalling.net.RequestScope
 import APICalling.net.Urls.enc
 import com.fasterxml.jackson.databind.JsonNode
 import java.util.concurrent.CompletableFuture
 
 class GeocodingApi(private val client: JsonHttpClient) {
 
-    fun search(query: String): CompletableFuture<List<Location>> {
+    fun search(query: String, scope: RequestScope): CompletableFuture<List<Location>> {
         val key = Config.graphHopperKey.trim()
         if (key.isEmpty()) {
             return CompletableFuture.failedFuture(
-                IllegalStateException("Введите ключ GraphHopper (поле слева или переменная окружения GRAPHHOPPER_KEY)")
+                IllegalStateException("Введите ключ GraphHopper (поле слева, переменная GRAPHHOPPER_KEY или файл secrets.properties)")
             )
         }
         val url = "${Config.GEOCODING_URL}?q=${enc(query)}&locale=ru&limit=${Config.GEOCODE_LIMIT}&key=${enc(key)}"
-        return client.getJson(url).thenApply { json -> parseHits(json) }
+        return client.getJson(url, scope) { json -> parseHits(json) }
     }
 
     private fun parseHits(json: JsonNode): List<Location> {

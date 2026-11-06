@@ -87,10 +87,14 @@ private class LocationCard(number: Int, val item: Location, private val onClick:
             col.add(WrapText(address, Theme.font(12f), Theme.textDim, 40, guessWidth = 300))
         }
         col.add(Box.createVerticalStrut(8))
-        col.add(rowOf(6, *listOfNotNull(
-            item.osmKey?.let { Chip(OsmTags.key(it), Theme.textDim) },
-            item.osmValue?.let { Chip(OsmTags.value(it), Theme.accent2) },
-        ).toTypedArray()))
+        col.add(
+            rowOf(
+                6, *listOfNotNull(
+                    item.osmKey?.let { Chip(OsmTags.key(it), Theme.textDim) },
+                    item.osmValue?.let { Chip(OsmTags.value(it), Theme.accent2) },
+                ).toTypedArray()
+            )
+        )
         add(JPanel(BorderLayout()).apply {
             isOpaque = false
             add(NumberBadge(number), BorderLayout.NORTH)

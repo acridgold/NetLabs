@@ -8,19 +8,14 @@ import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.awt.image.BufferedImage
 import java.net.URI
-import javax.swing.BorderFactory
-import javax.swing.BoxLayout
-import javax.swing.JComponent
-import javax.swing.JLabel
-import javax.swing.JPanel
-import javax.swing.SwingUtilities
+import javax.swing.*
 
 class PlaceCard(
     private val number: Int,
     private val place: Place,
-    private val image: BufferedImage?,
 ) : RoundedPanel(24, Theme.card) {
 
+    private val image: BufferedImage? = place.image
     private var expanded = false
     private var hover = false
 
@@ -92,15 +87,11 @@ class PlaceCard(
         }
         body.add(titleRow())
         body.add(vgap(8))
-        val text = place.description?.let { Fmt.excerpt(it) }
-        body.add(
-            WrapText(
-                text ?: "Описание в Википедии отсутствует.",
-                Theme.font(13f),
-                if (text == null) Theme.hint else Theme.textDim,
-                460,
-            )
-        )
+        body.add(descriptionText(Fmt.excerpt(place.description.orEmpty()).ifEmpty { null }, 13f, Theme.textDim))
+        imageProblem()?.let {
+            body.add(vgap(4))
+            body.add(it)
+        }
         body.add(vgap(8))
         body.add(JLabel("Подробнее  ›").left().apply {
             font = Theme.font(12f, true)
@@ -122,19 +113,30 @@ class PlaceCard(
             add(CloseButton { close() }, BorderLayout.EAST)
         })
         body.add(vgap(12))
-        body.add(
-            WrapText(
-                place.description ?: "Описание в Википедии отсутствует.",
-                Theme.font(14f),
-                if (place.description == null) Theme.hint else Theme.text,
-                440,
-            )
-        )
+        body.add(descriptionText(place.description, 14f, Theme.text))
+        imageProblem()?.let {
+            body.add(vgap(8))
+            body.add(it)
+        }
         body.add(vgap(16))
         body.add(rowOf(0, AccentButton("Открыть в Википедии", compact = true).apply {
             addActionListener { openArticle() }
         }))
         add(top(body), BorderLayout.CENTER)
+    }
+
+    private fun descriptionText(text: String?, size: Float, color: java.awt.Color): JComponent = when {
+        place.error != null ->
+            WrapText("Не удалось загрузить описание: ${place.error}", Theme.font(size), Theme.danger, 440)
+
+        text == null ->
+            WrapText("В Википедии нет описания этого места.", Theme.font(size), Theme.hint, 440)
+
+        else -> WrapText(text, Theme.font(size), color, 440)
+    }
+
+    private fun imageProblem(): JComponent? = place.imageError?.let {
+        WrapText("Картинка не загружена: $it", Theme.font(12f), Theme.danger, 440)
     }
 
     private fun top(c: JComponent): JComponent = JPanel(BorderLayout()).apply {

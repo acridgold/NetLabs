@@ -1,5 +1,7 @@
 package APICalling.model
 
+import java.awt.image.BufferedImage
+
 data class Location(
     val name: String,
     val street: String?,
@@ -42,8 +44,10 @@ class Place(
     val title: String,
     val distanceM: Int,
     val description: String?,
-    val imageUrl: String?,
-    val imageBytes: ByteArray?,
+    val error: String? = null,
+    val imageUrl: String? = null,
+    val image: BufferedImage? = null,
+    val imageError: String? = null,
 )
 
 data class Report(

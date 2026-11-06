@@ -8,15 +8,7 @@ import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.GridBagLayout
 import java.awt.GridLayout
-import java.awt.image.BufferedImage
-import java.io.ByteArrayInputStream
-import javax.imageio.ImageIO
-import javax.swing.BorderFactory
-import javax.swing.BoxLayout
-import javax.swing.JComponent
-import javax.swing.JLabel
-import javax.swing.JPanel
-import javax.swing.SwingUtilities
+import javax.swing.*
 
 class ReportView : JPanel(BorderLayout()) {
     init {
@@ -37,7 +29,7 @@ class ReportView : JPanel(BorderLayout()) {
             isOpaque = false
         }
         for (p in parts) {
-            p.alignmentX = JComponent.CENTER_ALIGNMENT
+            p.alignmentX = CENTER_ALIGNMENT
             column.add(p)
         }
         return JPanel(GridBagLayout()).apply {
@@ -97,8 +89,9 @@ class ReportView : JPanel(BorderLayout()) {
             places.isEmpty() -> col.add(
                 messageCard("В радиусе ${Fmt.radius(report.radiusM)} в Википедии ничего не нашлось. Попробуйте увеличить радиус.")
             )
+
             else -> places.forEachIndexed { index, place ->
-                col.add(PlaceCard(index + 1, place, decode(place.imageBytes)))
+                col.add(PlaceCard(index + 1, place))
                 col.add(vgap(12))
             }
         }
@@ -116,10 +109,14 @@ class ReportView : JPanel(BorderLayout()) {
 
     private fun heroCard(l: Location): JComponent {
         val card = card().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
-        card.add(rowOf(6, *listOfNotNull(
-            l.osmKey?.let { Chip(OsmTags.key(it), Theme.textDim) },
-            l.osmValue?.let { Chip(OsmTags.value(it), Theme.accent2) },
-        ).toTypedArray()))
+        card.add(
+            rowOf(
+                6, *listOfNotNull(
+                    l.osmKey?.let { Chip(OsmTags.key(it), Theme.textDim) },
+                    l.osmValue?.let { Chip(OsmTags.value(it), Theme.accent2) },
+                ).toTypedArray()
+            )
+        )
         card.add(vgap(10))
         card.add(WrapText(l.name, Theme.font(30f, true), Theme.text, 560))
         if (l.address.isNotEmpty()) {
@@ -139,7 +136,7 @@ class ReportView : JPanel(BorderLayout()) {
         val w = outcome.value
         if (w == null) {
             card.add(
-                WrapText("Погода недоступна: ${outcome.error.orEmpty()}", Theme.font(14f), Theme.danger, 520),
+                WrapText("Прогноз недоступен: ${outcome.error.orEmpty()}", Theme.font(14f), Theme.danger, 520),
                 BorderLayout.CENTER,
             )
             return card
@@ -149,7 +146,7 @@ class ReportView : JPanel(BorderLayout()) {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             isOpaque = false
         }
-        left.add(JLabel("СЕЙЧАС").left().apply {
+        left.add(JLabel("ПРОГНОЗ НА ${Fmt.updated(w.time).uppercase()}").left().apply {
             font = Theme.font(11f, true)
             foreground = Theme.hint
         })
@@ -169,7 +166,7 @@ class ReportView : JPanel(BorderLayout()) {
             foreground = Theme.textDim
         })
         left.add(vgap(6))
-        left.add(JLabel("Данные на ${Fmt.updated(w.time)}").left().apply {
+        left.add(JLabel("Прогноз MET Norway, не измерение").left().apply {
             font = Theme.font(11f)
             foreground = Theme.hint
         })
@@ -214,7 +211,12 @@ class ReportView : JPanel(BorderLayout()) {
             10,
             heading,
             Chip("радиус ${Fmt.radius(report.radiusM)}", Theme.accent),
-            *listOfNotNull(report.places.value?.let { Chip("найдено ${it.size}", Theme.accent2) }).toTypedArray(),
+            *listOfNotNull(
+                report.places.value?.let { Chip("найдено ${it.size}", Theme.accent2) },
+                report.places.value?.count { it.error != null || it.imageError != null }
+                    ?.takeIf { it > 0 }
+                    ?.let { Chip("ошибок загрузки: $it", Theme.danger) },
+            ).toTypedArray(),
         )
     }
 
@@ -223,11 +225,4 @@ class ReportView : JPanel(BorderLayout()) {
         card.add(WrapText(text, Theme.font(14f), color, 520), BorderLayout.CENTER)
         return card
     }
-
-    private fun decode(bytes: ByteArray?): BufferedImage? =
-        if (bytes == null) null else try {
-            ImageIO.read(ByteArrayInputStream(bytes))
-        } catch (e: Exception) {
-            null
-        }
 }
