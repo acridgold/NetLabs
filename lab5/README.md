@@ -106,24 +106,6 @@ curl -v --socks5-hostname 127.0.0.1:1080 http://example.com
 
 Код разбит на слои с односторонними зависимостями: верхние знают о нижних, но не наоборот.
 
-```
-                       Main / cli
-                           │
-                      proxy (прикладная логика)
-          ProxyServer ─ Acceptor ─ Session ─ ClientHandshake ─ Relay
-              │             │         │            │             │
-     ┌────────┴───────┬─────┴──┐      │            │             │
-    dns              net       │      │            │             │
- Resolver (интерфейс) Connector │      │            │             │
- UdpDnsResolver       │         │      │            │             │
- DnsCodec (dnsjava)   │         │      │            │             │
-     │                │         │      │         protocol         │
-     └────────────────┴─────────┴──────┴──── Socks5, Socks5Codec ──┘
-                           │             (чистая логика, без I/O)
-                       eventloop
-              EventLoop ─ ChannelHandler ─ Timer
-```
-
 | Пакет | Ответственность |
 |---|---|
 | `eventloop` | Реактор: один `Selector` + очередь таймеров. Единственный блокирующий вызов — `select(timeout)`. Ничего не знает про SOCKS и DNS |
@@ -136,23 +118,6 @@ curl -v --socks5-hostname 127.0.0.1:1080 http://example.com
 | `config`, `cli`, `util` | Конфигурация, разбор аргументов, логирование и мелкие утилиты |
 
 ### Жизненный цикл соединения
-
-```
-Acceptor ──> Session.start()
-                │
-                ▼
-        ClientHandshake                    greeting -> выбор метода -> разбор CONNECT
-                │ onRequest(dest)
-                ▼
-   Destination.Ip ─────────────┐
-   Destination.Domain ─> Resolver ─> Connector ──┤ (оба асинхронные, оба отменяемые)
-                                    │            │
-                          ошибка: reject(code)   ▼ успех
-                                    │         Relay  <── Handover: ответ клиенту + «лишний» ввод
-                                    ▼            │
-                     ответ об ошибке доставлен   ▼
-                                    └────────> Session.close()
-```
 
 - **`Session`** владеет сокетами и таймерами, но ничего не парсит и не пересылает.
 - **`ClientHandshake`** сообщает о результатах через `Listener` и не знает ни про DNS, ни про подключение.
