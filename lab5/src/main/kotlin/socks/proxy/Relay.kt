@@ -19,10 +19,10 @@ internal class Relay(
     private val onFinished: () -> Unit,
 ) {
     private class Pipe(size: Int) {
-        val buffer: ByteBuffer = ByteBuffer.allocateDirect(size) // режим записи
+        val buffer: ByteBuffer = ByteBuffer.allocateDirect(size)
         var sourceEof = false
         var sinkShut = false
-        var transferred = 0L // сколько байт прочитано из источника
+        var transferred = 0L
     }
 
     private val up = Pipe(bufferSize)
@@ -77,7 +77,7 @@ internal class Relay(
             if (n < 0) readPipe.sourceEof = true
             else if (n > 0) {
                 readPipe.transferred += n
-                peer.flush() // сразу пробуем отправить, не дожидаясь нового круга селектора
+                peer.flush()
             }
         }
 

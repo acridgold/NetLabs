@@ -1,5 +1,7 @@
 package socks.proxy
 
+import socks.clients.ClientRegistry
+import socks.clients.TrackedConnection
 import socks.config.ProxyConfig
 import socks.dns.ResolveResult
 import socks.dns.Resolver
@@ -24,33 +26,49 @@ internal class SessionContext(
     val config: ProxyConfig,
     val resolver: Resolver,
     val connector: Connector,
+    val registry: ClientRegistry,
 )
 
 
 internal class Session(
     private val ctx: SessionContext,
     private val client: SocketChannel,
+    override val uid: String,
     private val onClosed: (Session) -> Unit,
-) : ClientHandshake.Listener {
+) : ClientHandshake.Listener, TrackedConnection {
 
     private lateinit var clientKey: SelectionKey
     private lateinit var handshake: ClientHandshake
     private var remote: SocketChannel? = null
     private var timer: Timer? = null
-    private var pendingOp: Cancellable? = null // текущий DNS-запрос или подключение
+    private var pendingOp: Cancellable? = null
     private var closed = false
 
-    // для журнала доступа
-    private var clientAddr = "?"
-    private var target = "?"
+    private var clientAddrValue = "?"
+    private var targetValue = "?"
     private var relay: Relay? = null
     private var relayStartedNs = 0L
+    private var killedByBan = false
+
+    override val id: Long = nextId++
+    override val startedAtMs: Long = System.currentTimeMillis()
+    override val clientAddr: String get() = clientAddrValue
+    override val target: String get() = targetValue
+    override val bytesUp: Long get() = relay?.bytesToRemote ?: 0L
+    override val bytesDown: Long get() = relay?.bytesToClient ?: 0L
+
+
+    override fun kill() {
+        killedByBan = true
+        close()
+    }
 
     @Throws(IOException::class)
     fun start() {
         client.setOption(StandardSocketOptions.TCP_NODELAY, true)
-        clientAddr = (client.remoteAddress as? InetSocketAddress)
+        clientAddrValue = (client.remoteAddress as? InetSocketAddress)
             ?.let { "${it.address.hostAddress}:${it.port}" } ?: "?"
+        ctx.registry.register(this)
         clientKey = ctx.loop.register(client, 0, IdleHandler)
         handshake = ClientHandshake(client, clientKey, this)
         timer = ctx.loop.schedule(ctx.config.handshakeTimeoutMs) { close() }
@@ -62,7 +80,7 @@ internal class Session(
     override fun onRequest(destination: Destination) {
         timer?.cancel()
         timer = null
-        target = when (destination) {
+        targetValue = when (destination) {
             is Destination.Ip -> "${destination.address.hostAddress}:${destination.port}"
             is Destination.Domain -> "${destination.host}:${destination.port}"
         }
@@ -123,18 +141,27 @@ internal class Session(
     fun close() {
         if (closed) return
         closed = true
-        relay?.let { r ->
+        val ban = if (killedByBan) " [ЗАБАНЕН]" else ""
+        val r = relay
+        if (r != null) {
             val seconds = (System.nanoTime() - relayStartedNs) / 1_000_000_000
-            Log.access("$clientAddr -> $target CLOSED up=${r.bytesToRemote}B down=${r.bytesToClient}B time=${seconds}s")
+            Log.access("$clientAddr -> $target CLOSED$ban up=${r.bytesToRemote}B down=${r.bytesToClient}B time=${seconds}s")
+        } else if (killedByBan) {
+            Log.access("$clientAddr -> $target CLOSED$ban")
         }
         timer?.cancel()
         pendingOp?.cancel()
         closeQuietly(client)
         closeQuietly(remote)
+        ctx.registry.unregister(this)
         onClosed(this)
     }
 
     private object IdleHandler : ChannelHandler {
         override fun onReady(key: SelectionKey) {}
+    }
+
+    private companion object {
+        var nextId = 1L
     }
 }

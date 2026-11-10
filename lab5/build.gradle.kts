@@ -23,6 +23,12 @@ application {
     applicationName = "lab5"
 }
 
+// Аргументы программы по умолчанию для `run` (и для запуска из IDEA через Gradle).
+// Переопределить: ./gradlew run -PproxyArgs="1080 1.1.1.1:53"
+tasks.named<JavaExec>("run") {
+    args = (findProperty("proxyArgs") as String?)?.split(" ") ?: listOf("1080")
+}
+
 tasks.test {
     useJUnitPlatform()
 }

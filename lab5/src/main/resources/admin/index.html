@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SOCKS5 · панель</title>
+    <style>
+        :root {
+            --bg: #0a0e13; --panel: #111821; --line: #1f2b38; --fg: #c9d6e2; --dim: #6b7f92;
+            --green: #38f58a; --red: #ff1f1f; --amber: #ffb020; --blue: #5cc8ff;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: var(--bg); color: var(--fg);
+            font: 14px/1.45 ui-monospace, "JetBrains Mono", "Fira Code", Consolas, monospace; }
+        header { display: flex; align-items: baseline; gap: 24px; flex-wrap: wrap;
+            padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
+        header h1 { margin: 0; font-size: 18px; color: var(--green); letter-spacing: .5px; }
+        header .meta { color: var(--dim); }
+        header .meta b { color: var(--fg); font-weight: 600; }
+        #conn { margin-left: auto; padding: 2px 10px; border-radius: 10px; font-size: 12px; }
+        #conn.on  { background: #0d3320; color: var(--green); }
+        #conn.off { background: #3a1010; color: var(--red); }
+
+        .layout { display: grid; grid-template-columns: 1fr 380px; gap: 16px; padding: 16px 24px; align-items: start; }
+        @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+        #clients { display: grid; gap: 10px; }
+        .empty { color: var(--dim); padding: 32px; text-align: center; border: 1px dashed var(--line); border-radius: 8px; }
+        .client { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+            padding: 12px 14px; cursor: pointer; transition: border-color .15s; }
+        .client:hover { border-color: #345; }
+        .client.sel { border-color: var(--green); box-shadow: 0 0 0 1px var(--green) inset; }
+        .client.banned { border-color: #5a1818; background: #170d0d; }
+        .client.banned.sel { border-color: var(--red); box-shadow: 0 0 0 1px var(--red) inset; }
+        .chead { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .uid { font-size: 16px; font-weight: 700; }
+        .badge { font-size: 11px; padding: 1px 8px; border-radius: 10px; }
+        .badge.ok   { background: #0d3320; color: var(--green); }
+        .badge.idle { background: #1d2733; color: var(--dim); }
+        .badge.bad  { background: var(--red); color: #fff; font-weight: 700; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 4px 16px; }
+        .stat span:first-child { color: var(--dim); margin-right: 6px; }
+        .conns { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; max-height: 220px; overflow: auto; }
+        .conn { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; }
+        .conn .tgt { color: var(--blue); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .dim { color: var(--dim); white-space: nowrap; }
+
+        .side { position: sticky; top: 16px; background: var(--panel); border: 1px solid var(--line);
+            border-radius: 8px; padding: 16px; }
+        .side h2 { margin: 0 0 4px; font-size: 12px; color: var(--dim); font-weight: 400; text-transform: uppercase; letter-spacing: 1px; }
+        #selUid { font-size: 20px; font-weight: 700; margin-bottom: 8px; word-break: break-all; }
+        #selStats div { padding: 1px 0; }
+        #selStats span:first-child { color: var(--dim); display: inline-block; min-width: 110px; }
+
+        .ban-wrap { height: 270px; display: grid; place-items: center; overflow: hidden; }
+        .ban {
+            width: 170px; height: 170px; border-radius: 16px; cursor: pointer;
+            border: 6px solid #8a0000; color: #fff; font: 900 58px/1 Impact, "Arial Black", sans-serif;
+            letter-spacing: 2px; text-shadow: 0 3px 0 #700, 0 0 18px rgba(255,255,255,.35);
+            background: radial-gradient(circle at 35% 30%, #ff6a6a 0%, var(--red) 45%, #b00000 100%);
+            box-shadow: 0 0 28px rgba(255,31,31,.7), inset 0 -8px 0 rgba(0,0,0,.25);
+            transform: rotate(45deg); transition: transform .12s, filter .12s, box-shadow .12s;
+            animation: pulse 1.6s ease-in-out infinite;
+        }
+        .ban:hover:not(:disabled)  { transform: rotate(45deg) scale(1.07); filter: brightness(1.15); }
+        .ban:active:not(:disabled) { transform: rotate(45deg) scale(.96); }
+        .ban:disabled { cursor: not-allowed; filter: grayscale(1) brightness(.5); animation: none; box-shadow: none; }
+        @keyframes pulse { 50% { box-shadow: 0 0 48px rgba(255,31,31,1); } }
+
+        #unban { display: block; width: 100%; padding: 12px; font: 700 15px inherit; cursor: pointer;
+            border: 2px solid var(--green); background: transparent; color: var(--green); border-radius: 8px; }
+        #unban:hover { background: #0d3320; }
+        #unban[hidden] { display: none; }
+        .note { color: var(--dim); font-size: 12px; margin-top: 12px; }
+        #addrBar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+            padding: 10px 24px; border-bottom: 1px solid var(--line); background: #0d141c; }
+        #addrBar .label { color: var(--dim); }
+        .addr { font: 700 14px inherit; color: var(--green); background: #0d3320; border: 1px solid #14532f;
+            border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+        .addr:hover { background: #115c35; }
+        .addr small { color: var(--dim); font-weight: 400; margin-left: 6px; }
+    </style>
+</head>
+<body>
+<header>
+    <h1>SOCKS5 · ПАНЕЛЬ</h1>
+    <span class="meta">порт прокси: <b id="hPort">—</b></span>
+    <span class="meta">аптайм: <b id="hUp">—</b></span>
+    <span class="meta">соединений: <b id="hConns">0</b></span>
+    <span class="meta">клиентов: <b id="hClients">0</b></span>
+    <span id="conn" class="off">нет связи</span>
+</header>
+<div id="addrBar">
+    <span class="label">Адрес прокси (SOCKS5):</span>
+    <span id="addrs"><span class="dim">определяется…</span></span>
+    <span class="dim">нажмите, чтобы скопировать</span>
+</div>
+
+<div class="layout">
+    <section id="clients"><div class="empty">Пока никто не подключался…</div></section>
+
+    <aside class="side">
+        <h2>Выбранный клиент</h2>
+        <div id="selUid">— не выбран —</div>
+        <div id="selStats"></div>
+        <div class="ban-wrap">
+            <button id="ban" class="ban" disabled title="Закрыть все соединения и запретить пользоваться прокси">БАН</button>
+        </div>
+        <button id="unban" hidden>РАЗБАНИТЬ</button>
+        <div class="note">UID = IP-адрес клиента. Бан действует до перезапуска сервера.
+            За одним NAT-ом несколько человек делят один UID.</div>
+    </aside>
+</div>
+
+<script>
+    'use strict';
+    const $ = id => document.getElementById(id);
+    const el = (tag, cls, text) => {
+        const e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (text !== undefined) e.textContent = text;   // только textContent: имена хостов приходят от клиентов
+        return e;
+    };
+    const stat = (k, v) => { const d = el('div', 'stat'); d.append(el('span', '', k), el('span', '', String(v))); return d; };
+
+    function fmtBytes(n) {
+        const u = ['Б', 'КиБ', 'МиБ', 'ГиБ', 'ТиБ'];
+        let i = 0, v = n;
+        while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+        return (i === 0 ? v.toFixed(0) : v.toFixed(v < 10 ? 2 : 1)) + ' ' + u[i];
+    }
+    const fmtRate = n => fmtBytes(n) + '/с';
+    function fmtDur(ms) {
+        const s = Math.max(0, Math.floor(ms / 1000));
+        const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+        return h > 0 ? h + 'ч ' + m + 'м' : m > 0 ? m + 'м ' + x + 'с' : x + 'с';
+    }
+
+    let state = null, selected = null, online = false;
+    const prev = new Map();
+
+    async function poll() {
+        try {
+            const r = await fetch('/api/state', { cache: 'no-store' });
+            if (!r.ok) throw new Error(r.status);
+            const s = await r.json();
+            const t = performance.now();
+            for (const c of s.clients) {
+                const p = prev.get(c.uid);
+                const dt = p ? (t - p.t) / 1000 : 0;
+                c.rateUp = p && dt > 0 ? Math.max(0, (c.up - p.up) / dt) : 0;
+                c.rateDown = p && dt > 0 ? Math.max(0, (c.down - p.down) / dt) : 0;
+                prev.set(c.uid, { t, up: c.up, down: c.down });
+            }
+            state = s; online = true;
+        } catch (e) { online = false; }
+        render();
+    }
+
+    function render() {
+        const conn = $('conn');
+        conn.className = online ? 'on' : 'off';
+        conn.textContent = online ? 'онлайн' : 'нет связи';
+        if (!state) return;
+
+        $('hPort').textContent = state.proxyPort;
+        $('hUp').textContent = fmtDur(state.uptime * 1000);
+        $('hConns').textContent = state.clients.reduce((a, c) => a + c.active, 0);
+        $('hClients').textContent = state.clients.length;
+
+        const addrs = (state.addresses || []).map(a => {
+            const b = el('button', 'addr', a.ip + ':' + state.proxyPort);
+            b.dataset.copy = a.ip + ':' + state.proxyPort;
+            b.title = 'Интерфейс ' + a.iface;
+            b.append(el('small', '', a.iface));
+            return b;
+        });
+        $('addrs').replaceChildren(...(addrs.length ? addrs : [el('span', 'dim', 'сетевой адрес не найден (нет сети?)')]));
+
+        const box = $('clients');
+        const list = [...state.clients].sort((a, b) => b.active - a.active || a.uid.localeCompare(b.uid));
+        if (list.length === 0) {
+            box.replaceChildren(el('div', 'empty', 'Пока никто не подключался…'));
+        } else {
+            box.replaceChildren(...list.map(renderClient));
+        }
+        renderSide();
+    }
+
+    function renderClient(c) {
+        const card = el('div', 'client' + (c.uid === selected ? ' sel' : '') + (c.banned ? ' banned' : ''));
+        card.dataset.uid = c.uid;
+
+        const head = el('div', 'chead');
+        head.append(el('span', 'uid', c.uid));
+        head.append(el('span', 'badge ' + (c.banned ? 'bad' : c.active ? 'ok' : 'idle'),
+            c.banned ? 'ЗАБАНЕН' : c.active ? 'онлайн' : 'нет соединений'));
+        card.append(head);
+
+        const stats = el('div', 'stats');
+        stats.append(
+            stat('Соединений', c.active + ' / ' + c.total),
+            stat('↑ от клиента', fmtBytes(c.up)),
+            stat('↓ к клиенту', fmtBytes(c.down)),
+            stat('Скорость', '↑ ' + fmtRate(c.rateUp) + '  ↓ ' + fmtRate(c.rateDown)),
+        );
+        if (c.blocked) stats.append(stat('Отклонено', c.blocked));
+        card.append(stats);
+
+        if (c.conns.length) {
+            const box = el('div', 'conns');
+            for (const k of c.conns) {
+                const row = el('div', 'conn');
+                row.append(el('span', 'tgt', k.target),
+                    el('span', 'dim', '↑ ' + fmtBytes(k.up) + '  ↓ ' + fmtBytes(k.down) + '  ' + fmtDur(state.now - k.started)));
+                box.append(row);
+            }
+            card.append(box);
+        }
+        return card;
+    }
+
+    function renderSide() {
+        const c = state.clients.find(x => x.uid === selected);
+        $('selUid').textContent = c ? c.uid : '— не выбран —';
+        const st = $('selStats');
+        st.replaceChildren();
+        if (c) {
+            st.append(
+                stat('Соединений', c.active + ' / ' + c.total),
+                stat('↑ от клиента', fmtBytes(c.up)),
+                stat('↓ к клиенту', fmtBytes(c.down)),
+                stat('Скорость ↑', fmtRate(c.rateUp)),
+                stat('Скорость ↓', fmtRate(c.rateDown)),
+            );
+        }
+        $('ban').disabled = !c || c.banned;
+        $('unban').hidden = !(c && c.banned);
+    }
+
+    async function act(url) {
+        try {
+            const r = await fetch(url, { method: 'POST', headers: { 'X-Admin': '1' } });
+            if (!r.ok) alert('Ошибка: HTTP ' + r.status);
+        } catch (e) { alert('Нет связи с сервером'); }
+        poll();
+    }
+
+    $('clients').addEventListener('click', e => {
+        const card = e.target.closest('.client');
+        if (card) { selected = card.dataset.uid; render(); }
+    });
+    $('ban').addEventListener('click', () => {
+        if (!selected) return;
+        if (!confirm('Забанить ' + selected + '?\nВсе его соединения будут закрыты, новые — отклоняться.')) return;
+        act('/api/ban?uid=' + encodeURIComponent(selected));
+    });
+    $('unban').addEventListener('click', () => {
+        if (selected) act('/api/unban?uid=' + encodeURIComponent(selected));
+    });
+
+    $('addrs').addEventListener('click', async e => {
+        const b = e.target.closest('button[data-copy]');
+        if (!b) return;
+        try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'скопировано ✓'; }
+        catch (err) { prompt('Скопируйте адрес:', b.dataset.copy); }
+    });
+
+    setInterval(poll, 1000);
+    poll();
+</script>
+</body>
+</html>
