@@ -21,21 +21,28 @@ class GeocodingApi(private val client: JsonHttpClient) {
         return client.getJson(url, scope) { json -> parseHits(json) }
     }
 
-    private fun parseHits(json: JsonNode): List<Location> {
-        val hits = json.get("hits") ?: return emptyList()
+    internal fun parseHits(json: JsonNode): List<Location> {
+        val hits = json.requireObject().arrayField("hits")
+        if (hits.size() == 0) return emptyList()
+
         val seen = HashSet<String>()
-        return hits.mapNotNull { hit -> parseHit(hit) }.filter { seen.add(it.uniqueKey) }
+        val locations = hits.mapNotNull { parseHit(it) }.filter { seen.add(it.uniqueKey) }
+        if (locations.isEmpty()) {
+            invalid("ни один из ${hits.size()} результатов не прошёл проверку (нет корректных координат)")
+        }
+        return locations
     }
 
     private fun parseHit(hit: JsonNode): Location? {
-        val point = hit.get("point") ?: return null
-        val lat = point.get("lat")?.asDouble() ?: return null
-        val lon = point.get("lng")?.asDouble() ?: return null
+        if (!hit.isObject) return null
+        val point = hit.get("point")?.takeIf { it.isObject } ?: return null
+        val lat = point.coordinate("lat", -90.0..90.0) ?: return null
+        val lon = point.coordinate("lng", -180.0..180.0) ?: return null
 
-        val street = hit.text("street")
-        val house = hit.text("housenumber")
-        val city = hit.text("city")
-        val name = hit.text("name")
+        val street = hit.optionalTextField("street")
+        val house = hit.optionalTextField("housenumber")
+        val city = hit.optionalTextField("city")
+        val name = hit.optionalTextField("name")
             ?: listOfNotNull(street, house).joinToString(" ").ifBlank { null }
             ?: city
             ?: "Без названия"
@@ -45,18 +52,21 @@ class GeocodingApi(private val client: JsonHttpClient) {
             street = street,
             houseNumber = house,
             city = city,
-            state = hit.text("state"),
-            country = hit.text("country"),
-            postcode = hit.text("postcode"),
-            osmKey = hit.text("osm_key"),
-            osmValue = hit.text("osm_value"),
-            osmType = hit.text("osm_type"),
-            osmId = hit.get("osm_id")?.takeIf { !it.isNull }?.asLong(),
+            state = hit.optionalTextField("state"),
+            country = hit.optionalTextField("country"),
+            postcode = hit.optionalTextField("postcode"),
+            osmKey = hit.optionalTextField("osm_key"),
+            osmValue = hit.optionalTextField("osm_value"),
+            osmType = hit.optionalTextField("osm_type"),
+            osmId = hit.get("osm_id")?.takeIf { it.isIntegralNumber }?.asLong(),
             lat = lat,
             lon = lon,
         )
     }
 
-    private fun JsonNode.text(field: String): String? =
-        get(field)?.takeIf { !it.isNull }?.asText()?.trim()?.takeIf { it.isNotEmpty() }
+    private fun JsonNode.coordinate(name: String, range: ClosedFloatingPointRange<Double>): Double? {
+        val node = get(name)
+        if (node == null || !node.isNumber) return null
+        return node.doubleValue().takeIf { it.isFinite() && it in range }
+    }
 }
